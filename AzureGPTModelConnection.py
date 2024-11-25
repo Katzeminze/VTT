@@ -54,8 +54,3 @@ class ChatBot:
     
     def close_session(self):
         self.session.close()
-
-# chat = ChatBot()
-# response = chat.send_request_and_get_rwsponse("How to say I was born in Kazakhstan in Kazakh language?")
-# # Handle the response as needed (e.g., print or process)
-# print(response.json())
