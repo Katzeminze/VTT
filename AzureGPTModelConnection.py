@@ -35,7 +35,7 @@ class ChatBot:
             "max_tokens": self.max_tokens 
         }
 
-        ENDPOINT = "https://2024090111eny.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview"
+        ENDPOINT = "https://xxxx.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview"
 
         # Send request
         try:
