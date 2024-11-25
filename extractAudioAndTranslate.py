@@ -1,13 +1,16 @@
 from moviepy.editor import VideoFileClip
 import speech_recognition as sr
 from pydub import AudioSegment
-
 import whisper
-import csv
 
-from pydub import AudioSegment
+import csv
 import math
 import os
+import sys
+import time
+
+from openpyxl import Workbook
+
 from AzureTest import ChatBot
 
 
@@ -18,10 +21,31 @@ def transcribe_audio_with_whisper(audio_path, model_name="base"):
     result = model.transcribe(audio_path, language="de")
     return result["text"]
 
-def save_to_csv(data, filename):
-    with open(filename, 'a', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow([data])
+def save_to_csv(data: dict, filename: str): #, encoding='utf-8'):
+    # with open(filename, 'w', newline='', encoding=encoding) as csvfile:
+    with open(filename, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=['level_col', 'variable_col'])
+        writer.writeheader()
+        for key, value in data.items():
+            writer.writerow({'level_col': key, 'variable_col': value})
+
+def save_to_excel(data: dict, filename: str):
+    wb = Workbook()
+    ws = wb.active
+    
+    # Set header
+    ws['A1'] = 'Start time'
+    ws['B1'] = 'Text'
+    
+    # Write data
+    row = 2
+    for key, value in data.items():
+        ws[f'A{row}'] = key
+        ws[f'B{row}'] = value
+        row += 1
+    
+    # Save to file
+    wb.save(filename)
         
 def extract_audio_from_video(video_path, audio_path="extracted_audio.wav"):
     # Load the video file
@@ -42,6 +66,7 @@ def segment_audio(file_path, segment_length=60000, output_folder="audio_segments
     Returns:
     - List of file paths for the audio segments.
     """
+    start_time_list = []
     # Load the audio file
     audio = AudioSegment.from_file(file_path)
     
@@ -65,8 +90,9 @@ def segment_audio(file_path, segment_length=60000, output_folder="audio_segments
         segment_path = os.path.join(output_folder, f"segment_{i+1}.wav")
         segment.export(segment_path, format="wav")
         segment_paths.append(segment_path)
-    
-    return segment_paths
+        start_time_list.append(start_time/60000)
+        
+    return segment_paths, start_time_list
 
 def transcribe_audio(audio_path, language="de-DE"):
     recognizer = sr.Recognizer()
@@ -82,37 +108,54 @@ def transcribe_audio(audio_path, language="de-DE"):
             text = "Could not request results; check your internet connection"
     return text
 
-def extract_text_from_video(video_path):
-    final_str = ''
+def send_request(chat, initial_text, try_count=0):
+    response = chat.send_request_and_get_response(f"Translate the followingwithout any comments into English: {initial_text}")
+    if isinstance(response, int) and try_count < 5:
+        time.sleep(response)
+        return send_request(chat, initial_text, try_count + 1)
+    else:
+        return response
+
+def extract_text_from_video(video_path, video_name):
+    initial_constructed_str = ''
+    initial_text = ''
+    item = 0
+    time_text_dict = {}
+    time_text_dict_eng = {}
+    
+    chat = ChatBot()
+    
     # Step 1: Extract audio from video
     audio_path = extract_audio_from_video(video_path)
-    # # # Step 2: Segment audio to 1 minute
-    segments = segment_audio(audio_path, segment_length=60000) # 60,000 ms = 1 minute
-    # print("Segments:", segments)
+    # Step 2: Segment audio to 1 minute
+    segments, start_time_list = segment_audio(audio_path, segment_length=60000, output_folder=f"{video_name}") # 60,000 ms = 1 minute
+    print("Segments:", segments)
     # Step 3: Transcribe the audio segment with Whisper
     for segment in segments:
+        # time.sleep(25)
         text = transcribe_audio_with_whisper(segment)
-        # save_to_csv(text, "transcribed_text.csv")
-    # text = transcribe_audio_with_whisper(audio_path)
-    
-        chat = ChatBot()
-        response = chat.send_request_and_get_response(f"Translate the following into English: {text}?")
-        # Handle the response as needed (e.g., print or process)
+        initial_text = text.strip() + "\n"
+        # print(initial_text)
+        response = send_request(chat, initial_text)
+        # # Handle the response as needed (e.my_string.splitlines()g., print or process)
         data = response.json()
         print(data)
         content = data['choices'][0]['message']['content'] 
-        final_str = final_str + content
-    save_to_csv(final_str, "english_text.csv")
+        time_text_dict_eng[f"{start_time_list[item]}"] = str(content)
+        item+=1
 
-# Example usage
-video_path = r"C:\Users\nyrobtseva\Documents\ToText_EN\nctable-issue-NCC-3466.mp4"  # Replace with your video file path
-transcribed_text = extract_text_from_video(video_path)
-# print("Transcribed Text:\n", transcribed_text)
+    save_to_excel(time_text_dict_eng, f"english_text_{video_name}.csv")
+    chat.close_session()
 
-# chat = ChatBot()
-# response = chat.send_request_and_get_response(f"Translate the following into English: {transcribed_text}?")
-# # Handle the response as needed (e.g., print or process)
-# data = response.json()
-# print(data)
-# content = data['choices'][0]['message']['content']
-# save_to_csv(content, "english_text.csv")
+
+if __name__ == "__main__":
+    # Example usage
+    if len(sys.argv) < 2:
+        video_path = r"PATH"  # Replace with your video file path
+        video_file_name = os.path.basename(video_path)
+        transcribed_text = extract_text_from_video(video_path, video_file_name)
+    elif len(sys.argv) == 2:
+        video_path = sys.argv[1]
+        video_file_name = os.path.basename(video_path)
+        transcribed_text = extract_text_from_video(video_path, video_file_name)
+
