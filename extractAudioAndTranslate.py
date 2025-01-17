@@ -11,7 +11,7 @@ import time
 
 from openpyxl import Workbook
 
-from AzureGPTModelConnection import ChatBot
+from AzureTest import ChatBot
 
 
 def transcribe_audio_with_whisper(audio_path, model_name="base"):
@@ -108,15 +108,15 @@ def transcribe_audio(audio_path, language="de-DE"):
             text = "Could not request results; check your internet connection"
     return text
 
-def send_request(chat, initial_text, try_count=0):
-    response = chat.send_request_and_get_response(f"Translate the followingwithout any comments into English: {initial_text}")
+def send_request(chat, initial_text, language="English", try_count=0):
+    response = chat.send_request_and_get_response(f"Translate the following without any comments into {language}: {initial_text}")
     if isinstance(response, int) and try_count < 5:
         time.sleep(response)
         return send_request(chat, initial_text, try_count + 1)
     else:
         return response
 
-def extract_text_from_video(video_path, video_name):
+def extract_text_from_video(video_path, video_name, language="English"):
     initial_constructed_str = ''
     initial_text = ''
     item = 0
@@ -136,7 +136,7 @@ def extract_text_from_video(video_path, video_name):
         text = transcribe_audio_with_whisper(segment)
         initial_text = text.strip() + "\n"
         # print(initial_text)
-        response = send_request(chat, initial_text)
+        response = send_request(chat, initial_text, language)
         # # Handle the response as needed (e.my_string.splitlines()g., print or process)
         data = response.json()
         print(data)
@@ -144,12 +144,12 @@ def extract_text_from_video(video_path, video_name):
         time_text_dict_eng[f"{start_time_list[item]}"] = str(content)
         item+=1
 
-    save_to_excel(time_text_dict_eng, f"english_text_{video_name}.csv")
+    save_to_excel(time_text_dict_eng, f"{language}_text_{video_name}.csv")
     chat.close_session()
 
 
 if __name__ == "__main__":
-    # Example usage
+    # An action based on input parameters
     if len(sys.argv) < 2:
         video_path = r"PATH"  # Replace with your video file path
         video_file_name = os.path.basename(video_path)
@@ -158,4 +158,9 @@ if __name__ == "__main__":
         video_path = sys.argv[1]
         video_file_name = os.path.basename(video_path)
         transcribed_text = extract_text_from_video(video_path, video_file_name)
+    elif len(sys.argv) == 3:
+        video_path = sys.argv[1]
+        video_file_name = os.path.basename(video_path)
+        language = sys.argv[2]
+        transcribed_text = extract_text_from_video(video_path, video_file_name, language)
 
