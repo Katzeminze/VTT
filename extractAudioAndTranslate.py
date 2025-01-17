@@ -11,7 +11,7 @@ import time
 
 from openpyxl import Workbook
 
-from AzureTest import ChatBot
+from AzureGPTModelConnection import ChatBot
 
 
 def transcribe_audio_with_whisper(audio_path, model_name="base"):
